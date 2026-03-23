@@ -451,7 +451,13 @@ int ext4fs_check_journal_state(int recovery_flag)
 				cpu_to_be32(JBD2_FEATURE_COMPAT_CHECKSUM);
 
 	i = be32_to_cpu(jsb->s_first);
+#ifdef CONFIG_FUZZ
+	/* Limit journal replay iterations to prevent hangs from corrupt data */
+	int journal_iter_limit = 10000;
+	while (journal_iter_limit-- > 0) {
+#else
 	while (1) {
+#endif
 		blknr = read_allocated_block(&inode_journal, i, NULL);
 		memset(temp_buff1, '\0', fs->blksz);
 		ext4fs_devread((lbaint_t)blknr * fs->sect_perblk,

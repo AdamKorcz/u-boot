@@ -644,6 +644,11 @@ static int search_dir(struct ext2_inode *parent_inode, char *dirname)
 
 	directory_blocks = le32_to_cpu(parent_inode->size) >>
 		LOG2_BLOCK_SIZE(ext4fs_root);
+#ifdef CONFIG_FUZZ
+	/* Guard against huge inode.size causing excessive block iteration */
+	if (directory_blocks > 4096)
+		directory_blocks = 4096;
+#endif
 
 	block_buffer = zalloc(fs->blksz);
 	if (!block_buffer)
@@ -949,6 +954,11 @@ int ext4fs_filename_unlink(char *filename)
 
 	directory_blocks = le32_to_cpu(g_parent_inode->size) >>
 		LOG2_BLOCK_SIZE(ext4fs_root);
+#ifdef CONFIG_FUZZ
+	/* Guard against huge inode.size causing excessive block iteration */
+	if (directory_blocks > 4096)
+		directory_blocks = 4096;
+#endif
 
 	/* read the block no allocated to a file */
 	for (blk_idx = 0; blk_idx < directory_blocks; blk_idx++) {
@@ -968,6 +978,9 @@ uint32_t ext4fs_get_new_blk_no(void)
 	short i;
 	short status;
 	int remainder;
+#ifdef CONFIG_FUZZ
+	int restart_limit = 10000;
+#endif
 	unsigned int bg_idx;
 	static int prev_bg_bitmap_index = -1;
 	unsigned int blk_per_grp = le32_to_cpu(ext4fs_root->sblock.blocks_per_group);
@@ -1022,6 +1035,10 @@ uint32_t ext4fs_get_new_blk_no(void)
 	} else {
 		fs->curr_blkno++;
 restart:
+#ifdef CONFIG_FUZZ
+		if (--restart_limit <= 0)
+			goto fail;
+#endif
 		/* get the blockbitmap index respective to blockno */
 		bg_idx = fs->curr_blkno / blk_per_grp;
 		if (fs->blksz == 1024) {
@@ -2076,6 +2093,12 @@ int ext4fs_iterate_dir(struct ext2fs_node *dir, char *name,
 			printf("Failed to iterate over directory %s\n", name);
 			return 0;
 		}
+
+#ifdef CONFIG_FUZZ
+		/* Guard against corrupted inode.size causing excessive iteration */
+		if (fpos > 16 * 1024 * 1024)
+			return 0;
+#endif
 
 		if (dirent.namelen != 0) {
 			char filename[dirent.namelen + 1];

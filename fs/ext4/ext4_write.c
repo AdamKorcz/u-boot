@@ -626,6 +626,11 @@ int ext4fs_init(void)
 			le32_to_cpu(ext4fs_root->sblock.total_blocks)
 			- le32_to_cpu(ext4fs_root->sblock.first_data_block),
 			le32_to_cpu(ext4fs_root->sblock.blocks_per_group));
+#ifdef CONFIG_FUZZ
+	/* Cap block groups to prevent excessive loop iterations from corrupt superblock */
+	if (fs->no_blkgrp > 256)
+		fs->no_blkgrp = 256;
+#endif
 
 	/* get the block group descriptor table */
 	fs->gdtable_blkno = ((EXT2_MIN_BLOCK_SIZE == fs->blksz) + 1);

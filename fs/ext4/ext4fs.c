@@ -78,6 +78,11 @@ int ext4fs_read_file(struct ext2fs_node *node, loff_t pos,
 	int log2_fs_blocksize = LOG2_BLOCK_SIZE(node->data) - log2blksz;
 	int blocksize = (1 << (log2_fs_blocksize + log2blksz));
 	unsigned int filesize = le32_to_cpu(node->inode.size);
+#ifdef CONFIG_FUZZ
+	/* Cap file size to prevent excessive read loops from corrupt metadata */
+	if (filesize > 256 * 1024)
+		filesize = 256 * 1024;
+#endif
 	lbaint_t previous_block_number = -1;
 	lbaint_t delayed_start = 0;
 	lbaint_t delayed_extent = 0;

@@ -27,12 +27,14 @@ cmd_u-boot__ = \
 	$(CC) -o $@ -Wl,-T u-boot.lds $(u-boot-init) \
 	$(KBUILD_LDFLAGS:%=-Wl,%) \
 	$(SANITIZERS) \
+	$(KCFLAGS) \
 	$(LTO_FINAL_LDFLAGS) \
 	-Wl,--whole-archive \
 		$(u-boot-main) \
 		$(u-boot-keep-syms-lto) \
 	-Wl,--no-whole-archive \
-	$(PLATFORM_LIBS) -Wl,-Map -Wl,u-boot.map -Wl,--gc-sections
+	$(PLATFORM_LIBS) -Wl,-Map -Wl,u-boot.map -Wl,--gc-sections \
+	-Wl,--allow-multiple-definition
 
 cmd_u-boot-spl = (cd $(obj) && \
 	touch $(patsubst $(obj)/%,%,$(u-boot-spl-main)) && \

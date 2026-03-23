@@ -37,6 +37,10 @@
 #include <rtc_def.h>
 #include <env.h>
 
+#ifdef CONFIG_FUZZ
+jmp_buf fuzz_exit_jmp;
+#endif
+
 /* Environment variable for time offset */
 #define ENV_TIME_OFFSET "UBOOT_SB_TIME_OFFSET"
 
@@ -146,7 +150,14 @@ int os_unlink(const char *pathname)
 
 void os_exit(int exit_code)
 {
+#ifdef CONFIG_FUZZ
+	/* Under fuzzing, longjmp back to the fuzz iteration so the
+	 * fuzzer can continue with a new input.
+	 */
+	longjmp(fuzz_exit_jmp, 1);
+#else
 	exit(exit_code);
+#endif
 }
 
 unsigned int os_alarm(unsigned int seconds)
@@ -1129,17 +1140,26 @@ void os_relaunch(char *argv[])
 static void *fuzzer_thread(void * ptr)
 {
 	char cmd[64];
-	char *argv[5] = {"./u-boot", "-T", "-c", cmd, NULL};
+	char *argv[6] = {"u-boot", "-L", "0", "-c", cmd, NULL};
 	const char *fuzz_test;
 
 	/* Find which test to run from an environment variable. */
 	fuzz_test = getenv("UBOOT_SB_FUZZ_TEST");
 	if (!fuzz_test)
+		fuzz_test = program_invocation_short_name;
+	if (!fuzz_test)
 		os_abort();
 
 	snprintf(cmd, sizeof(cmd), "fuzz %s", fuzz_test);
 
-	sandbox_main(4, argv);
+	/* Suppress u-boot's stdout to keep libFuzzer's stderr output readable. */
+	int devnull = open("/dev/null", O_WRONLY);
+	if (devnull >= 0) {
+		dup2(devnull, STDOUT_FILENO);
+		close(devnull);
+	}
+
+	sandbox_main(5, argv);
 	os_abort();
 	return NULL;
 }
